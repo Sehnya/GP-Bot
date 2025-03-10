@@ -31,7 +31,16 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
    */
   if (type === InteractionType.PING) {
     return res.send({ type: InteractionResponseType.PONG });
-  }
+    }
+  
+    if (name === 'ping') {
+  return res.send({
+    type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+    data: {
+      content: 'Pong! 🏓',
+    },
+  });
+}
 
   /**
    * Handle slash command requests

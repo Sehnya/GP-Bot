@@ -2,63 +2,80 @@ import 'dotenv/config';
 import express from 'express';
 import { InteractionType, InteractionResponseType, verifyKeyMiddleware } from 'discord-interactions';
 import { DiscordRequest } from '../utils.js';
+import morgan from 'morgan';
+import rateLimit from 'express-rate-limit';
 
 // Create and configure express app
 const app = express();
 
 app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), function (req, res) {
-  // Interaction type and data
-  const { type, data } = req.body;
-  /**
-   * Handle slash command requests
-   */
-  if (type === InteractionType.APPLICATION_COMMAND) {
-    // Slash command with name of "test"
-    if (data.name === 'test') {
-      // Send a message as response
-      return res.send({
-        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: { content: 'A wild message appeared' },
-      });
+  try {
+    if (type === InteractionType.APPLICATION_COMMAND) {
+      switch(data.name) {
+        case 'test':
+          return res.send({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: { content: 'A wild message appeared' },
+          });
+        case 'ping':
+          return res.send({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: { content: 'Pong!' },
+          });
+        // Add more commands here
+        default:
+          return res.send({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: { content: 'Unknown command' },
+          });
+      }
     }
+  } catch (error) {
+    console.error('Error handling interaction:', error);
+    res.status(500).send('Internal Server Error');
   }
 });
 
-async function createCommand() {
-  const appId = process.env.APP_ID;
+const PORT = process.env.PORT || 3000;
 
-  /**
-   * Globally-scoped slash commands (generally only recommended for production)
-   * See https://discord.com/developers/docs/interactions/application-commands#create-global-application-command
-   */
+app.listen(PORT, () => {
+  console.log(`Listening on port ${PORT}`);
+  createCommands();
+});
+
+async function createCommands() {
+  const appId = process.env.APP_ID;
   const globalEndpoint = `applications/${appId}/commands`;
 
-  /**
-   * Guild-scoped slash commands
-   * See https://discord.com/developers/docs/interactions/application-commands#create-guild-application-command
-   */
-  // const guildEndpoint = `applications/${appId}/guilds/<your guild id>/commands`;
-  const commandBody = {
-    name: 'test',
-    description: 'Just your average command',
-    // chat command (see https://discord.com/developers/docs/interactions/application-commands#application-command-object-application-command-types)
-    type: 1,
-  };
+  const commands = [
+    {
+      name: 'test',
+      description: 'Just your average command',
+      type: 1,
+    },
+    {
+      name: 'ping',
+      description: 'Responds with Pong!',
+      type: 1,
+    },
+    // Add more commands here
+  ];
 
   try {
-    // Send HTTP request with bot token
-    const res = await DiscordRequest(globalEndpoint, {
-      method: 'POST',
-      body: commandBody,
-    });
-    console.log(await res.json());
+    for (const command of commands) {
+      const res = await DiscordRequest(globalEndpoint, {
+        method: 'POST',
+        body: command,
+      });
+      console.log(await res.json());
+    }
   } catch (err) {
     console.error('Error installing commands: ', err);
   }
 }
-
-app.listen(3000, () => {
-  console.log('Listening on port 3000');
-
-  createCommand();
-});
+app.use(
+  morgan('dev'),
+  rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // limit each IP to 100 requests per windowMs
+  }));
