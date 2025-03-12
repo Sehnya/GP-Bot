@@ -1,5 +1,4 @@
 import 'dotenv/config';
-import express from 'express';
 import fetch from 'node-fetch';
 import { Client, GatewayIntentBits } from 'discord.js';
 import {
@@ -16,8 +15,8 @@ import { getShuffledOptions, getResult } from './game.js';
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
 const PORT = process.env.PORT || 3000;
-// Update this line near the top of your file
 const REDIRECT_URI = `http://localhost:${PORT}/callback`;
+import express from 'express';
 const app = express();
 
 // Discord.js client setup
@@ -38,17 +37,15 @@ client.on('messageCreate', (message) => {
     message.reply('Pong!');
   }
 });
-app.get('/login', (req, res) => {
+
+app.get('/login', (_req, res) => {
   const authUrl = new URL('https://discord.com/api/oauth2/authorize');
   authUrl.searchParams.append('client_id', CLIENT_ID);
   authUrl.searchParams.append('redirect_uri', REDIRECT_URI);
   authUrl.searchParams.append('response_type', 'code');
-  authUrl.searchParams.append('scope', 'identify guilds');
+  authUrl.searchParams.append('scope', 'bot applications.commands');
 
   console.log('Redirecting to:', authUrl.toString());
-  console.log('CLIENT_ID:', CLIENT_ID);
-  console.log('REDIRECT_URI:', REDIRECT_URI);
-  console.log('CLIENT_SECRET:', CLIENT_SECRET);
   res.redirect(authUrl.toString());
 });
 
@@ -66,7 +63,6 @@ app.get('/callback', async (req, res) => {
           code,
           grant_type: 'authorization_code',
           redirect_uri: REDIRECT_URI,
-          scope: 'identify guilds',
         }),
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -77,16 +73,7 @@ app.get('/callback', async (req, res) => {
       console.log('OAuth response:', oauthData);
 
       if (oauthData.access_token) {
-        // Use the access token to fetch user information
-        const userResponse = await fetch('https://discord.com/api/users/@me', {
-          headers: {
-            authorization: `Bearer ${oauthData.access_token}`,
-          },
-        });
-        const userData = await userResponse.json();
-        console.log('User data:', userData);
-
-        res.send('Authorization successful! You can close this window.');
+        res.send('Bot has been added to the server! You can close this window.');
       } else {
         console.error('OAuth error:', oauthData);
         res.status(400).send('Failed to get access token: ' + JSON.stringify(oauthData));
@@ -299,6 +286,3 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
   console.error('unknown interaction type', type);
   return res.status(400).json({ error: 'unknown interaction type' });
 });
-
-// Remove or comment out the following line if it exists
-// app.listen(PORT, () => { ... });
