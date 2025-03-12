@@ -1,17 +1,22 @@
 import 'dotenv/config';
 import express from 'express';
 import { InteractionType, InteractionResponseType, verifyKeyMiddleware } from 'discord-interactions';
-import { DiscordRequest } from '../utils.js';
+import { DiscordRequest } from './utils.js';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 
+console.log('DISCORD_TOKEN:', process.env.DISCORD_TOKEN ? 'Set' : 'Not set');
+console.log('APP_ID:', process.env.APP_ID);
+console.log('PUBLIC_KEY:', process.env.PUBLIC_KEY ? 'Set' : 'Not set');
 // Create and configure express app
 const app = express();
+app.use(express.json()); // Middleware to parse JSON bodies
 
 app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), function (req, res) {
+  const { type, data } = req.body; // Parse type and data from request body
   try {
     if (type === InteractionType.APPLICATION_COMMAND) {
-      switch(data.name) {
+      switch (data.name) {
         case 'test':
           return res.send({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
@@ -38,9 +43,9 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), function 
 
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`Listening on port ${PORT}`);
-  createCommands();
+  await createCommands(); // Ensure commands are created after server starts
 });
 
 async function createCommands() {
@@ -73,9 +78,11 @@ async function createCommands() {
     console.error('Error installing commands: ', err);
   }
 }
+
 app.use(
   morgan('dev'),
   rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 100, // limit each IP to 100 requests per windowMs
-  }));
+  })
+);

@@ -1,20 +1,136 @@
 import 'dotenv/config';
 import express from 'express';
+import fetch from 'node-fetch';
+import { Client, GatewayIntentBits } from 'discord.js';
 import {
   InteractionType,
   InteractionResponseType,
   InteractionResponseFlags,
   MessageComponentTypes,
   ButtonStyleTypes,
-  verifyKeyMiddleware,
 } from 'discord-interactions';
+import { verifyKeyMiddleware } from 'discord-interactions';
 import { getRandomEmoji, DiscordRequest } from './utils.js';
 import { getShuffledOptions, getResult } from './game.js';
 
-// Create an express app
-const app = express();
-// Get port, or default to 3000
+const CLIENT_ID = process.env.CLIENT_ID;
+const CLIENT_SECRET = process.env.CLIENT_SECRET;
 const PORT = process.env.PORT || 3000;
+// Update this line near the top of your file
+const REDIRECT_URI = `http://localhost:${PORT}/callback`;
+const app = express();
+
+// Discord.js client setup
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+  ]
+});
+
+client.on('ready', () => {
+  console.log(`Logged in as ${client.user.tag}!`);
+});
+
+client.on('messageCreate', (message) => {
+  if (message.content === '!ping') {
+    message.reply('Pong!');
+  }
+});
+app.get('/login', (req, res) => {
+  const authUrl = new URL('https://discord.com/api/oauth2/authorize');
+  authUrl.searchParams.append('client_id', CLIENT_ID);
+  authUrl.searchParams.append('redirect_uri', REDIRECT_URI);
+  authUrl.searchParams.append('response_type', 'code');
+  authUrl.searchParams.append('scope', 'identify guilds');
+
+  console.log('Redirecting to:', authUrl.toString());
+  console.log('CLIENT_ID:', CLIENT_ID);
+  console.log('REDIRECT_URI:', REDIRECT_URI);
+  console.log('CLIENT_SECRET:', CLIENT_SECRET);
+  res.redirect(authUrl.toString());
+});
+
+app.get('/callback', async (req, res) => {
+  const { code } = req.query;
+  console.log('Received code:', code);
+
+  if (code) {
+    try {
+      const tokenResponse = await fetch('https://discord.com/api/oauth2/token', {
+        method: 'POST',
+        body: new URLSearchParams({
+          client_id: CLIENT_ID,
+          client_secret: CLIENT_SECRET,
+          code,
+          grant_type: 'authorization_code',
+          redirect_uri: REDIRECT_URI,
+          scope: 'identify guilds',
+        }),
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+      });
+
+      const oauthData = await tokenResponse.json();
+      console.log('OAuth response:', oauthData);
+
+      if (oauthData.access_token) {
+        // Use the access token to fetch user information
+        const userResponse = await fetch('https://discord.com/api/users/@me', {
+          headers: {
+            authorization: `Bearer ${oauthData.access_token}`,
+          },
+        });
+        const userData = await userResponse.json();
+        console.log('User data:', userData);
+
+        res.send('Authorization successful! You can close this window.');
+      } else {
+        console.error('OAuth error:', oauthData);
+        res.status(400).send('Failed to get access token: ' + JSON.stringify(oauthData));
+      }
+    } catch (error) {
+      console.error('Error during authorization:', error);
+      res.status(500).send('Error during authorization: ' + error.message);
+    }
+  } else {
+    res.status(400).send('No code provided');
+  }
+});
+
+const startServer = (port) => {
+  return new Promise((resolve, reject) => {
+    const server = app.listen(port)
+      .on('listening', () => {
+        const address = server.address();
+        console.log(`Server is now listening on port ${address.port}`);
+        // Login to Discord with your client's token
+        client.login(process.env.DISCORD_TOKEN);
+        resolve(server);
+      })
+      .on('error', (err) => {
+        if (err.code === 'EADDRINUSE') {
+          console.log(`Port ${port} is already in use. Trying the next port...`);
+          server.close();
+          startServer(port + 1).then(resolve).catch(reject);
+        } else {
+          reject(err);
+        }
+      });
+  });
+};
+
+// Start the server
+startServer(PORT)
+  .then(() => {
+    console.log('Server started successfully');
+  })
+  .catch((err) => {
+    console.error('Failed to start server:', err);
+    process.exit(1);
+  });
 
 // Store for in-progress games. In production, you'd want to use a DB
 const activeGames = {};
@@ -176,7 +292,7 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
         }
       }
     }
-    
+
     return;
   }
 
@@ -184,6 +300,5 @@ app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async fun
   return res.status(400).json({ error: 'unknown interaction type' });
 });
 
-app.listen(PORT, () => {
-  console.log('Listening on port', PORT);
-});
+// Remove or comment out the following line if it exists
+// app.listen(PORT, () => { ... });
