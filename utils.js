@@ -1,39 +1,47 @@
-import 'dotenv/config';
+import "dotenv/config";
+import fetch from "node-fetch";
 
+// Function to make a Discord API request
+// UPDATED TO: Added logging to capture the response body for debugging
 export async function DiscordRequest(endpoint, options) {
-  const url = 'https://discord.com/api/v10/' + endpoint;
-  if (options.body) options.body = JSON.stringify(options.body);
+  const url = `https://discord.com/api/v9/${endpoint}`;
   const res = await fetch(url, {
+    ...options,
     headers: {
       Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
-      'Content-Type': 'application/json; charset=UTF-8',
+      "Content-Type": "application/json",
+      ...options.headers,
     },
-    ...options
   });
+
+  const responseBody = await res.json();
+
   if (!res.ok) {
-    const data = await res.json();
-    console.log('Discord API Error:', res.status, data);
-    throw new Error(JSON.stringify(data));
+    console.error(
+      `Error with Discord API request: ${res.status}`,
+      responseBody
+    );
+    throw new Error(`Discord API request failed with status ${res.status}`);
   }
-  return res;
+
+  return responseBody;
 }
 
 export async function InstallGlobalCommands(appId, commands) {
-  // API endpoint to overwrite global commands
   const endpoint = `applications/${appId}/commands`;
-
   try {
-    // This is calling the bulk overwrite endpoint: https://discord.com/developers/docs/interactions/application-commands#bulk-overwrite-global-application-commands
-    await DiscordRequest(endpoint, { method: 'PUT', body: commands });
-  } catch (err) {
-    console.error(err);
+    await DiscordRequest(endpoint, { method: "PUT", body: commands });
+  } catch (error) {
+    console.error("Error installing commands:", error);
+    throw error;
   }
 }
 
-// Simple method that returns a random emoji from list
+// Function to get a random emoji
+// UPDATED TO: Added function to get a random emoji
 export function getRandomEmoji() {
-  const emojiList = ['😭','😄','😌','🤓','😎','😤','🤖','😶‍🌫️','🌏','📸','💿','👋','🌊','✨'];
-  return emojiList[Math.floor(Math.random() * emojiList.length)];
+  const emojis = ["😀", "😃", "😄", "😁", "😆", "😅", "😂", "🤣", "😊", "😇"];
+  return emojis[Math.floor(Math.random() * emojis.length)];
 }
 
 export function capitalize(str) {
